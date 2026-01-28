@@ -6,17 +6,15 @@ echo "  Dploy Auto-Deploy Installer"
 echo "======================================"
 echo
 
-# ===== Base directory =====
+# ===== Ask user for inputs =====
 DEFAULT_BASE="$(pwd)"
 read -p "Base directory for deployment [${DEFAULT_BASE}]: " BASE
 BASE="${BASE:-$DEFAULT_BASE}"
 
-# ===== Branch (hardcoded in deploy.sh) =====
 DEFAULT_BRANCH="production"
 read -p "Git branch to deploy [${DEFAULT_BRANCH}]: " BRANCH
 BRANCH="${BRANCH:-$DEFAULT_BRANCH}"
 
-# ===== SSH key =====
 DEFAULT_KEY_NAME="dploy-git"
 read -p "SSH key filename inside .ssh [${DEFAULT_KEY_NAME}]: " KEY_NAME
 KEY_NAME="${KEY_NAME:-$DEFAULT_KEY_NAME}"
@@ -44,64 +42,66 @@ echo
 [ ! -f "$KEY" ] && { echo "❌ Missing SSH key $KEY"; exit 1; }
 
 # ===== Create deploy.sh =====
-cat > "$SCRIPT" <<EOF
+cat > "$SCRIPT" <<'EOF'
 #!/bin/bash
 set -e
 
-BASE="\$(cd "\$(dirname "\$0")" && pwd)"
-KEY="\$BASE/.ssh/$KEY_NAME"
-STATE="\$BASE/.last_commit"
-LOG="\$BASE/deploy.log"
+BASE="$(cd "$(dirname "$0")" && pwd)"
+KEY="$BASE/.ssh/KEY_NAME_PLACEHOLDER"
+STATE="$BASE/.last_commit"
+LOG="$BASE/deploy.log"
 LOCK="/tmp/website-deploy.lock"
 
 export PATH=/usr/local/bin:/usr/bin:/bin
 
 # HARDCODED branch
-BRANCH="$BRANCH"
+BRANCH="BRANCH_PLACEHOLDER"
 
 # Dynamic repo from YAML
-REPO=\$(grep 'git_repository:' "\$BASE/.dploy/config.yml" | head -n1 | sed -E 's/^[[:space:]]*git_repository:[[:space:]]*//; s/^'\''//; s/'\''\$//')
+REPO=$(grep 'git_repository:' "$BASE/.dploy/config.yml" | head -n1 | sed -E 's/^[[:space:]]*git_repository:[[:space:]]*//; s/^'\''//; s/'\''$//')
 
-[ -z "\$REPO" ] && { echo "\$(date '+%Y-%m-%d %H:%M:%S') \$BRANCH: ERROR: git_repository not found" >> "\$LOG"; exit 1; }
+[ -z "$REPO" ] && { echo "$(date '+%Y-%m-%d %H:%M:%S') $BRANCH: ERROR: git_repository not found" >> "$LOG"; exit 1; }
 
-exec 9>"\$LOCK"
+# Prevent overlapping runs
+exec 9>"$LOCK"
 flock -n 9 || exit 0
 
-export GIT_SSH_COMMAND="ssh -i \$KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+export GIT_SSH_COMMAND="ssh -i $KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
 
-REMOTE=\$(git ls-remote "\$REPO" "refs/heads/\$BRANCH" | awk '{print \$1}')
-[ -z "\$REMOTE" ] && {
-  echo "\$(date '+%Y-%m-%d %H:%M:%S') \$BRANCH: ERROR: git ls-remote failed" >> "\$LOG"
-  exit 1
-}
+REMOTE=$(git ls-remote "$REPO" "refs/heads/$BRANCH" | awk '{print $1}')
+[ -z "$REMOTE" ] && { echo "$(date '+%Y-%m-%d %H:%M:%S') $BRANCH: ERROR: git ls-remote failed" >> "$LOG"; exit 1; }
 
-LAST=\$(cat "\$STATE" 2>/dev/null || echo "")
+LAST=$(cat "$STATE" 2>/dev/null || echo "")
 
-[ "\$REMOTE" = "\$LAST" ] && exit 0  # skip no-changes logs
+[ "$REMOTE" = "$LAST" ] && exit 0  # skip no-changes logs
 
-START=\$(date +%s)
-OUTPUT=\$(dploy deploy "\$BRANCH" 2>&1)
-STATUS=\$?
-END=\$(date +%s)
-DURATION=\$((END - START))
+START=$(date +%s)
+OUTPUT=$(dploy deploy "$BRANCH" 2>&1)
+STATUS=$?
+END=$(date +%s)
+DURATION=$((END - START))
 
 # Shorten commit hash to 7 chars
-SHORT_COMMIT="\${REMOTE:0:7}"
+SHORT_COMMIT="${REMOTE:0:7}"
 
-if [ \$STATUS -eq 0 ]; then
-  echo "\$REMOTE" > "\$STATE"
-  echo "\$(date '+%Y-%m-%d %H:%M:%S') \$BRANCH: deployed \$SHORT_COMMIT (\${DURATION}s)" >> "\$LOG"
+if [ $STATUS -eq 0 ]; then
+  echo "$REMOTE" > "$STATE"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') $BRANCH: deployed $SHORT_COMMIT (${DURATION}s)" >> "$LOG"
 else
-  FIRST=\$(echo "\$OUTPUT" | head -n 1 | tr -d '\r')
-  echo "\$(date '+%Y-%m-%d %H:%M:%S') \$BRANCH: ERROR (\${DURATION}s): \$FIRST" >> "\$LOG"
+  FIRST=$(echo "$OUTPUT" | head -n 1 | tr -d '\r')
+  echo "$(date '+%Y-%m-%d %H:%M:%S') $BRANCH: ERROR (${DURATION}s): $FIRST" >> "$LOG"
   exit 1
 fi
 EOF
 
-# Make deploy.sh executable
+# ===== Replace placeholders =====
+sed -i "s|KEY_NAME_PLACEHOLDER|$KEY_NAME|" "$SCRIPT"
+sed -i "s|BRANCH_PLACEHOLDER|$BRANCH|" "$SCRIPT"
+
+# ===== Make deploy.sh executable =====
 chmod +x "$SCRIPT"
 
-# Ensure state & log exist
+# ===== Ensure state & log exist =====
 touch "$STATE" "$LOG"
 
 # ===== Cron =====
