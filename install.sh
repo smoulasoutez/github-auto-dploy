@@ -6,34 +6,22 @@ echo "  Dploy Auto-Deploy Installer"
 echo "======================================"
 echo
 
-###################################
-# Base directory
-###################################
-
+# ===== Base directory =====
 DEFAULT_BASE="$(pwd)"
 read -p "Base directory for deployment [${DEFAULT_BASE}]: " BASE
 BASE="${BASE:-$DEFAULT_BASE}"
 
-###################################
-# Branch (HARDCODED later)
-###################################
-
+# ===== Branch (hardcoded in deploy.sh) =====
 DEFAULT_BRANCH="production"
 read -p "Git branch to deploy [${DEFAULT_BRANCH}]: " BRANCH
 BRANCH="${BRANCH:-$DEFAULT_BRANCH}"
 
-###################################
-# SSH key
-###################################
-
+# ===== SSH key =====
 DEFAULT_KEY_NAME="dploy-git"
 read -p "SSH key filename inside .ssh [${DEFAULT_KEY_NAME}]: " KEY_NAME
 KEY_NAME="${KEY_NAME:-$DEFAULT_KEY_NAME}"
 
-###################################
-# Paths
-###################################
-
+# ===== Paths =====
 CFG="$BASE/.dploy/config.yml"
 KEY="$BASE/.ssh/$KEY_NAME"
 SCRIPT="$BASE/deploy.sh"
@@ -41,6 +29,7 @@ STATE="$BASE/.last_commit"
 LOG="$BASE/deploy.log"
 LOCK="/tmp/website-deploy.lock"
 
+# ===== Summary =====
 echo
 echo "Configuration summary:"
 echo "  Base dir:  $BASE"
@@ -49,18 +38,12 @@ echo "  SSH key:   $KEY"
 echo "  Config:    $CFG"
 echo
 
-###################################
-# Sanity checks
-###################################
-
-[ ! -d "$BASE" ] && { echo "❌ Base directory does not exist"; exit 1; }
+# ===== Sanity checks =====
+[ ! -d "$BASE" ] && { echo "❌ Base directory does not exist: $BASE"; exit 1; }
 [ ! -f "$CFG" ] && { echo "❌ Missing $CFG"; exit 1; }
 [ ! -f "$KEY" ] && { echo "❌ Missing SSH key $KEY"; exit 1; }
 
-###################################
-# Create deploy.sh
-###################################
-
+# ===== Create deploy.sh =====
 cat > "$SCRIPT" <<EOF
 #!/bin/bash
 set -e
@@ -94,7 +77,7 @@ REMOTE=\$(git ls-remote "\$REPO" "refs/heads/\$BRANCH" | awk '{print \$1}')
 
 LAST=\$(cat "\$STATE" 2>/dev/null || echo "")
 
-[ "\$REMOTE" = "\$LAST" ] && exit 0  # do not log "no changes"
+[ "\$REMOTE" = "\$LAST" ] && exit 0  # skip no-changes logs
 
 START=\$(date +%s)
 OUTPUT=\$(dploy deploy "\$BRANCH" 2>&1)
@@ -102,7 +85,7 @@ STATUS=\$?
 END=\$(date +%s)
 DURATION=\$((END - START))
 
-# Shorten commit hash to 7 chars for log
+# Shorten commit hash to 7 chars
 SHORT_COMMIT="\${REMOTE:0:7}"
 
 if [ \$STATUS -eq 0 ]; then
@@ -121,10 +104,7 @@ chmod +x "$SCRIPT"
 # Ensure state & log exist
 touch "$STATE" "$LOG"
 
-###################################
-# Cron
-###################################
-
+# ===== Cron =====
 ( crontab -l 2>/dev/null | grep -v "$SCRIPT" || true
   echo "*/2 * * * * $SCRIPT"
   echo "0 0 1 * * truncate -s 0 $LOG"
