@@ -21,3 +21,13 @@ Clone the repository:
 ```bash
 git clone https://github.com/m-svob/github-auto-dploy.git
 cd github-auto-dploy
+```
+
+
+## Usage
+
+
+```bash
+wget https://raw.githubusercontent.com/m-svob/github-auto-dploy/main/install.sh -O install.sh
+bash install.sh
+```
