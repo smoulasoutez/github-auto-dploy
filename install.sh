@@ -102,8 +102,8 @@ notify_discord() {
   curl -s -X POST "$DISCORD_WEBHOOK" \
     -H "Content-Type: application/json" \
     -d "{
-      \"username\": \"Deploy master\",
-      \"avatar_url\": \"https://cdn.pfps.gg/pfps/4408-cartoon-meme.png\",
+      \"username\": \"DPLOY master\",
+      \"avatar_url\": \"https://ps.w.org/clp-varnish-cache/assets/icon-256x256.png?rev=2825319\",
       \"embeds\": [
         {
           \"title\": \"$TITLE_ESCAPED\",
